@@ -122,6 +122,10 @@ const LiveSession = () => {
 
   // 5. SCREEN SHARE LOGIC
   const handleScreenShare = async () => {
+    if (!connectionRef.current) {
+    alert("Waiting for peer connection...");
+    return;
+    }
     if (!isSharing) {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({ cursor: true });
       const videoTrack = screenStream.getVideoTracks()[0];
@@ -174,13 +178,21 @@ const LiveSession = () => {
 
   // 7. TOGGLE CONTROLS
   const toggleMute = () => {
+    if (stream?.getAudioTracks()[0]) {
     stream.getAudioTracks()[0].enabled = !stream.getAudioTracks()[0].enabled;
     setIsMuted(!isMuted);
+  } else {
+    alert("Microphone not found or access denied.");
+  }
   };
 
   const toggleVideo = () => {
+    if (stream?.getVideoTracks()[0]) {
     stream.getVideoTracks()[0].enabled = !stream.getVideoTracks()[0].enabled;
     setIsVideoOff(!isVideoOff);
+  } else {
+    alert("Camera not found or access denied.");
+  }
   };
 
   return (

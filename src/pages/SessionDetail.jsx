@@ -179,7 +179,7 @@ const SessionDetail = () => {
                     <span className="text-white font-bold">Room is Active</span>
                   </div>
                   <button
-                    onClick={() => navigate(`/live-session?id=${sessionId}`)}
+                    onClick={() => navigate(`/live-session?id=${sessionData.id}`)}
                     className="w-full bg-[#48CFCB] hover:bg-[#3bb5b1] text-white font-extrabold py-4 rounded-2xl transition-all shadow-lg mb-4"
                   >
                     Join Video Call
