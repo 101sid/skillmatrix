@@ -18,14 +18,12 @@ const Messages = () => {
   const [isSending, setIsSending] = useState(false);
   const [onlineUsers, setOnlineUsers] = useState({});
 
-  // 1. INITIAL LOAD: Get Auth User & Contact List
   useEffect(() => {
     const initMessages = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
       setMyId(session.user.id);
 
-      // Fetch all users except me
       const { data: users } = await supabase
         .from('profiles')
         .select('*')
@@ -39,7 +37,6 @@ const Messages = () => {
     setupPresence();
   }, []);
 
-  // 2. REAL-TIME PRESENCE (Online/Offline Status)
   const setupPresence = async () => {
     const channel = supabase.channel('online-users');
     channel
@@ -60,12 +57,9 @@ const Messages = () => {
       });
   };
 
-  // 3. FETCH MESSAGES & SUBSCRIBE
   useEffect(() => {
     if (!activeContact || !myId) return;
 
-    // 👈 ROBUST FETCH: We fetch all messages where you are the sender OR receiver
-    // This removes the complex logic that was causing the 400 Error.
     const fetchHistory = async () => {
       const { data, error } = await supabase
         .from('messages')
@@ -78,7 +72,6 @@ const Messages = () => {
         return;
       }
 
-      // Filter in JavaScript to only show messages between YOU and the ACTIVE CONTACT
       const conversation = data.filter(msg => 
         (msg.sender_id === myId && msg.receiver_id === activeContact.id) || 
         (msg.sender_id === activeContact.id && msg.receiver_id === myId)
@@ -89,7 +82,6 @@ const Messages = () => {
 
     fetchHistory();
 
-    // Subscribe to new messages
     const channel = supabase
       .channel(`chat-${activeContact.id}`)
       .on('postgres_changes', { 
@@ -98,7 +90,6 @@ const Messages = () => {
         table: 'messages' 
       }, (payload) => {
         const newMsg = payload.new;
-        // Check if the incoming real-time message belongs to THIS specific conversation
         const isFromMe = newMsg.sender_id === myId && newMsg.receiver_id === activeContact.id;
         const isToMe = newMsg.sender_id === activeContact.id && newMsg.receiver_id === myId;
         
@@ -111,12 +102,10 @@ const Messages = () => {
     return () => { supabase.removeChannel(channel); };
   }, [activeContact, myId]);
 
-  // 4. AUTO-SCROLL TO BOTTOM
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 5. SEND MESSAGE
   const handleSendMessage = async () => {
     if (!messageInput.trim() || isSending) return;
     setIsSending(true);
@@ -137,7 +126,6 @@ const Messages = () => {
     }
   };
 
-  // 6. FILE UPLOAD
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -204,27 +192,44 @@ const Messages = () => {
           <div className="lg:col-span-8 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col h-full overflow-hidden">
             {activeContact ? (
               <>
-                <div className="p-6 border-b border-gray-100 flex items-center">
-                  <img src={activeContact.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeContact.avatar_seed}`} className="w-12 h-12 rounded-full mr-4 bg-gray-50 border border-gray-100" alt="" />
-                  <div>
-                    <h3 className="font-extrabold text-lg m-0">{activeContact.full_name}</h3>
-                    <span className={`text-xs font-bold ${onlineUsers[activeContact.id] ? 'text-brand-teal' : 'text-gray-400'}`}>
-                        {onlineUsers[activeContact.id] ? 'Online Now' : 'Offline'}
-                    </span>
+                {/* 1. CLICKABLE HEADER TO OPEN PROFILE */}
+                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                  <div 
+                    className="flex items-center cursor-pointer group"
+                    onClick={() => navigate(`/profile/${activeContact.id}`)}
+                  >
+                    <img src={activeContact.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeContact.avatar_seed}`} className="w-12 h-12 rounded-full mr-4 bg-gray-50 border-2 border-transparent group-hover:border-brand-teal transition-all shadow-sm" alt="" />
+                    <div>
+                      <h3 className="font-extrabold text-lg m-0 group-hover:text-brand-teal transition-colors">{activeContact.full_name}</h3>
+                      <span className={`text-xs font-bold ${onlineUsers[activeContact.id] ? 'text-brand-teal' : 'text-gray-400'}`}>
+                          {onlineUsers[activeContact.id] ? 'Online Now' : 'Offline'}
+                      </span>
+                    </div>
                   </div>
+                  <button onClick={() => navigate(`/profile/${activeContact.id}`)} className="text-xs font-bold text-gray-400 hover:text-brand-teal uppercase tracking-widest transition-colors">View Profile</button>
                 </div>
 
                 <div className="flex-grow overflow-y-auto p-6 bg-gray-50/30 flex flex-col gap-4">
                   {messages.map((msg) => (
-                    <div key={msg.id} className={`flex ${msg.sender_id === myId ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[70%] flex flex-col ${msg.sender_id === myId ? 'items-end' : 'items-start'}`}>
-                        <div className={`px-4 py-2 rounded-2xl text-sm shadow-sm ${msg.sender_id === myId ? 'bg-brand-blue text-white rounded-tr-none' : 'bg-white border rounded-tl-none'}`}>
-                          {msg.type === 'text' && msg.content}
-                          {msg.type === 'image' && <img src={msg.file_url} className="rounded-lg max-w-full h-auto cursor-pointer" alt="Sent" onClick={() => window.open(msg.file_url)} />}
-                          {msg.type === 'file' && <div className="flex items-center gap-2 font-bold"><i className="fa-solid fa-file-lines text-xl text-brand-teal"></i><span className="underline cursor-pointer">{msg.file_name}</span></div>}
+                    <div key={msg.id} className={`flex ${msg.type === 'system' ? 'justify-center my-4' : msg.sender_id === myId ? 'justify-end' : 'justify-start'}`}>
+                      
+                      {/* 2. SYSTEM MESSAGE RENDERING (Automated Bookings/Ratings) */}
+                      {msg.type === 'system' ? (
+                        <div className="bg-white border border-teal-100 px-6 py-2 rounded-full shadow-sm flex items-center gap-3 animate-fade-in">
+                          <i className="fa-solid fa-circle-check text-brand-teal"></i>
+                          <span className="text-[11px] font-bold text-brand-navy uppercase tracking-tight">{msg.content}</span>
                         </div>
-                        <span className="text-[9px] font-bold text-gray-400 mt-1">{new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                      </div>
+                      ) : (
+                        <div className={`max-w-[70%] flex flex-col ${msg.sender_id === myId ? 'items-end' : 'items-start'}`}>
+                          <div className={`px-4 py-2 rounded-2xl text-sm shadow-sm ${msg.sender_id === myId ? 'bg-brand-blue text-white rounded-tr-none' : 'bg-white border rounded-tl-none'}`}>
+                            {msg.type === 'text' && msg.content}
+                            {msg.type === 'image' && <img src={msg.file_url} className="rounded-lg max-w-full h-auto cursor-pointer" alt="Sent" onClick={() => window.open(msg.file_url)} />}
+                            {msg.type === 'file' && <div className="flex items-center gap-2 font-bold"><i className="fa-solid fa-file-lines text-xl text-brand-teal"></i><span className="underline cursor-pointer">{msg.file_name}</span></div>}
+                          </div>
+                          <span className="text-[9px] font-bold text-gray-400 mt-1">{new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                        </div>
+                      )}
+                      
                     </div>
                   ))}
                   <div ref={scrollRef} />
