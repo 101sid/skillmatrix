@@ -36,7 +36,7 @@ function App() {
         <Route path="/live-session" element={<LiveSession />} />
         <Route path="/sessions-log" element={<SessionsLog />} />
         <Route path="/wallet" element={<Wallet />} />
-        <Route path="/profile" element={<Profile />} />
+        <Route path="/profile/:id" element={<Profile />} />
         
         {/* User Preferences & Help */}
         <Route path="/settings" element={<Settings />} />

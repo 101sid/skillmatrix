@@ -175,12 +175,14 @@ const Messages = () => {
             <div className="flex-grow overflow-y-auto p-3">
               {filteredContacts.map(c => (
                 <div key={c.id} onClick={() => setActiveContact(c)} className={`flex items-center p-3 rounded-2xl cursor-pointer mb-1 transition-all ${c.id === activeContact?.id ? 'bg-teal-50 border-teal-100' : 'hover:bg-gray-50'}`}>
-                  <div className="relative">
-                    <img src={c.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.avatar_seed}`} className="w-12 h-12 rounded-full mr-3 bg-white border border-gray-100" alt="" />
+                  <div className="relative group" onClick={(e) => { e.stopPropagation(); navigate(`/profile/${c.id}`); }}>
+                    <img src={c.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.avatar_seed}`} className="w-12 h-12 rounded-full mr-3 bg-white border border-gray-100 group-hover:border-brand-teal transition-all" alt="" />
                     {onlineUsers[c.id] && <div className="absolute bottom-0 right-3 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>}
                   </div>
                   <div className="flex-grow min-w-0">
-                    <h4 className="font-bold text-sm truncate m-0 text-brand-navy">{c.full_name || "Unknown Peer"}</h4>
+                    <h4 className="font-bold text-sm truncate m-0 text-brand-navy hover:text-brand-teal transition-colors" onClick={(e) => { e.stopPropagation(); navigate(`/profile/${c.id}`); }}>
+                        {c.full_name || "Unknown Peer"}
+                    </h4>
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{c.role || "Peer"}</p>
                   </div>
                 </div>
@@ -192,13 +194,17 @@ const Messages = () => {
           <div className="lg:col-span-8 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col h-full overflow-hidden">
             {activeContact ? (
               <>
-                {/* 1. CLICKABLE HEADER TO OPEN PROFILE */}
-                <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+                {/* INTERACTIVE HEADER */}
+                <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
                   <div 
                     className="flex items-center cursor-pointer group"
                     onClick={() => navigate(`/profile/${activeContact.id}`)}
                   >
-                    <img src={activeContact.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeContact.avatar_seed}`} className="w-12 h-12 rounded-full mr-4 bg-gray-50 border-2 border-transparent group-hover:border-brand-teal transition-all shadow-sm" alt="" />
+                    <img 
+                        src={activeContact.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${activeContact.avatar_seed}`} 
+                        className="w-12 h-12 rounded-full mr-4 bg-gray-50 border-2 border-transparent group-hover:border-brand-teal transition-all shadow-sm object-cover" 
+                        alt={activeContact.full_name} 
+                    />
                     <div>
                       <h3 className="font-extrabold text-lg m-0 group-hover:text-brand-teal transition-colors">{activeContact.full_name}</h3>
                       <span className={`text-xs font-bold ${onlineUsers[activeContact.id] ? 'text-brand-teal' : 'text-gray-400'}`}>
@@ -206,17 +212,29 @@ const Messages = () => {
                       </span>
                     </div>
                   </div>
-                  <button onClick={() => navigate(`/profile/${activeContact.id}`)} className="text-xs font-bold text-gray-400 hover:text-brand-teal uppercase tracking-widest transition-colors">View Profile</button>
+                  <div className="flex items-center gap-4">
+                    <button 
+                        onClick={() => navigate(`/profile/${activeContact.id}`)} 
+                        className="hidden md:block text-xs font-bold text-gray-400 hover:text-brand-teal uppercase tracking-widest transition-colors border-r border-gray-100 pr-4"
+                    >
+                        View Profile
+                    </button>
+                    <button onClick={() => navigate('/marketplace')} className="text-brand-teal hover:text-brand-darkTeal font-bold text-sm">
+                        <i className="fa-regular fa-calendar-plus mr-1"></i> Book Again
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex-grow overflow-y-auto p-6 bg-gray-50/30 flex flex-col gap-4">
                   {messages.map((msg) => (
                     <div key={msg.id} className={`flex ${msg.type === 'system' ? 'justify-center my-4' : msg.sender_id === myId ? 'justify-end' : 'justify-start'}`}>
                       
-                      {/* 2. SYSTEM MESSAGE RENDERING (Automated Bookings/Ratings) */}
+                      {/* SYSTEM MESSAGE (Booking/Rating Notifications) */}
                       {msg.type === 'system' ? (
-                        <div className="bg-white border border-teal-100 px-6 py-2 rounded-full shadow-sm flex items-center gap-3 animate-fade-in">
-                          <i className="fa-solid fa-circle-check text-brand-teal"></i>
+                        <div className="bg-white border border-teal-100 px-6 py-2.5 rounded-full shadow-sm flex items-center gap-3 animate-fade-in max-w-[90%]">
+                          <div className="bg-teal-50 w-8 h-8 rounded-full flex items-center justify-center">
+                            <i className="fa-solid fa-bell text-brand-teal text-xs"></i>
+                          </div>
                           <span className="text-[11px] font-bold text-brand-navy uppercase tracking-tight">{msg.content}</span>
                         </div>
                       ) : (
