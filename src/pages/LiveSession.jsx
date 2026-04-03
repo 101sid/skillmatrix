@@ -3,6 +3,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import Peer from 'simple-peer'; // You MUST have simple-peer installed
 
+// Google and Twilio STUN Servers to bypass Wi-Fi Firewalls
+const ICE_SERVERS = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:global.stun.twilio.com:3478' }
+  ]
+};
+
 const LiveSession = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -84,7 +92,6 @@ const LiveSession = () => {
 
       channel
         .on('broadcast', { event: 'signal' }, (payload) => {
-          // If we receive a WebRTC signal, pass it to simple-peer
           if (payload.payload.userId !== auth.user.id) {
              handleIncomingSignal(payload.payload.signal, localStream, auth.user.id);
           }
@@ -92,12 +99,22 @@ const LiveSession = () => {
         .on('broadcast', { event: 'chat' }, (payload) => {
           setMessages(prev => [...prev, payload.payload]);
         })
+        // The Ping/Pong Radar to prevent the Race Condition
+        .on('broadcast', { event: 'ping' }, () => {
+          channel.send({ type: 'broadcast', event: 'pong', payload: {} });
+          if (sData && sData.student_id === auth.user.id && !connectionRef.current) {
+            startCall(localStream, auth.user.id);
+          }
+        })
+        .on('broadcast', { event: 'pong' }, () => {
+          if (sData && sData.student_id === auth.user.id && !connectionRef.current) {
+            startCall(localStream, auth.user.id);
+          }
+        })
         .subscribe(async (status) => {
            if (status === 'SUBSCRIBED') {
-             // CRITICAL: If you are the student, you initiate the call!
-             if (sData && sData.student_id === auth.user.id) {
-               startCall(localStream, auth.user.id);
-             }
+             // Announce arrival to trigger ping/pong
+             channel.send({ type: 'broadcast', event: 'ping', payload: {} });
            }
         });
     };
@@ -122,9 +139,9 @@ const LiveSession = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // 3. WEBRTC FUNCTIONS (Using simple-peer)
+  // 3. WEBRTC FUNCTIONS (Using simple-peer with STUN servers)
   const startCall = (myStream, userId) => {
-    const peer = new Peer({ initiator: true, trickle: false, stream: myStream });
+    const peer = new Peer({ initiator: true, trickle: false, stream: myStream, config: ICE_SERVERS });
 
     peer.on('signal', data => {
       channelRef.current.send({ type: 'broadcast', event: 'signal', payload: { signal: data, userId } });
@@ -141,7 +158,7 @@ const LiveSession = () => {
     if (connectionRef.current) {
         connectionRef.current.signal(incomingSignal);
     } else {
-        const peer = new Peer({ initiator: false, trickle: false, stream: myStream });
+        const peer = new Peer({ initiator: false, trickle: false, stream: myStream, config: ICE_SERVERS });
         
         peer.on('signal', data => {
           channelRef.current.send({ type: 'broadcast', event: 'signal', payload: { signal: data, userId } });
@@ -274,7 +291,6 @@ const LiveSession = () => {
           {/* PEER VIDEO */}
           <div className="flex-1 relative bg-gray-900/50 rounded-[40px] overflow-hidden border border-white/5 shadow-2xl flex items-center justify-center min-h-[300px]">
              {peerStream ? (
-                // 👈 FIX: Robust Ref Assignment
                 <video 
                   autoPlay 
                   playsInline 
@@ -303,7 +319,6 @@ const LiveSession = () => {
                   <span className="text-[10px] font-black uppercase tracking-widest mt-1">Camera Off</span>
                 </div>
              ) : (
-                // 👈 FIX: Robust Ref Assignment
                 <video 
                   autoPlay 
                   playsInline 
