@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import Peer from 'simple-peer'; // You MUST have simple-peer installed
+
+// 👈 FIX 1: Bypass Vite's broken simple-peer import and use the global browser version
+const Peer = window.SimplePeer;
 
 // Google and Twilio STUN Servers to bypass Wi-Fi Firewalls
 const ICE_SERVERS = {
@@ -24,7 +26,6 @@ const LiveSession = () => {
   const connectionRef = useRef(null);
   const channelRef = useRef(null);
   const chatEndRef = useRef(null);
-  const fileInputRef = useRef(null);
 
   // --- STATES ---
   const [myId, setMyId] = useState(null);
@@ -76,15 +77,18 @@ const LiveSession = () => {
 
       // Start Local Camera
       try {
+        console.log("📷 Requesting Camera/Mic access...");
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         setStream(localStream);
+        console.log("📷 Camera access granted!");
       } catch (err) {
-        console.error("Camera Error:", err);
+        console.error("❌ Camera Error:", err);
         alert("Please allow camera access to join the session.");
         return;
       }
 
       // Initialize Supabase Channel for WebRTC Signaling & Chat
+      console.log("📡 Connecting to Supabase Channel...");
       const channel = supabase.channel(`room-${roomId}`, {
         config: { broadcast: { self: false } }
       });
@@ -93,27 +97,28 @@ const LiveSession = () => {
       channel
         .on('broadcast', { event: 'signal' }, (payload) => {
           if (payload.payload.userId !== auth.user.id) {
+             console.log("📥 Received WebRTC Signal from peer!");
              handleIncomingSignal(payload.payload.signal, localStream, auth.user.id);
           }
         })
         .on('broadcast', { event: 'chat' }, (payload) => {
           setMessages(prev => [...prev, payload.payload]);
         })
-        // The Ping/Pong Radar to prevent the Race Condition
+        // 👈 FIX 2: Bulletproof Ping/Pong Radar
         .on('broadcast', { event: 'ping' }, () => {
+          console.log("👋 Received PING from newcomer. Sending PONG...");
           channel.send({ type: 'broadcast', event: 'pong', payload: {} });
-          if (sData && sData.student_id === auth.user.id && !connectionRef.current) {
-            startCall(localStream, auth.user.id);
-          }
         })
         .on('broadcast', { event: 'pong' }, () => {
-          if (sData && sData.student_id === auth.user.id && !connectionRef.current) {
+          console.log("🎯 Received PONG! The other person is ready.");
+          if (!connectionRef.current) {
+            console.log("🚀 Initiating the WebRTC Call!");
             startCall(localStream, auth.user.id);
           }
         })
         .subscribe(async (status) => {
            if (status === 'SUBSCRIBED') {
-             // Announce arrival to trigger ping/pong
+             console.log("✅ Joined Room! Broadcasting PING...");
              channel.send({ type: 'broadcast', event: 'ping', payload: {} });
            }
         });
@@ -139,17 +144,23 @@ const LiveSession = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // 3. WEBRTC FUNCTIONS (Using simple-peer with STUN servers)
+  // 3. WEBRTC FUNCTIONS
   const startCall = (myStream, userId) => {
-    const peer = new Peer({ initiator: true, trickle: false, stream: myStream, config: ICE_SERVERS });
+    // 👈 FIX 3: Removed trickle: false to drastically speed up connection
+    const peer = new Peer({ initiator: true, stream: myStream, config: ICE_SERVERS });
 
     peer.on('signal', data => {
+      console.log('📤 Sending WebRTC Offer...');
       channelRef.current.send({ type: 'broadcast', event: 'signal', payload: { signal: data, userId } });
     });
 
     peer.on('stream', remoteStream => {
+      console.log('🎥 PEER STREAM RECEIVED!');
       setPeerStream(remoteStream);
     });
+
+    peer.on('connect', () => console.log('🎉 WEBRTC SECURE CONNECTION ESTABLISHED!'));
+    peer.on('error', err => console.error('❌ WEBRTC ERROR:', err));
 
     connectionRef.current = peer;
   };
@@ -158,15 +169,21 @@ const LiveSession = () => {
     if (connectionRef.current) {
         connectionRef.current.signal(incomingSignal);
     } else {
-        const peer = new Peer({ initiator: false, trickle: false, stream: myStream, config: ICE_SERVERS });
+        console.log("📞 Receiving incoming call. Generating Answer...");
+        const peer = new Peer({ initiator: false, stream: myStream, config: ICE_SERVERS });
         
         peer.on('signal', data => {
+          console.log('📤 Sending WebRTC Answer...');
           channelRef.current.send({ type: 'broadcast', event: 'signal', payload: { signal: data, userId } });
         });
 
         peer.on('stream', remoteStream => {
+          console.log('🎥 PEER STREAM RECEIVED!');
           setPeerStream(remoteStream);
         });
+
+        peer.on('connect', () => console.log('🎉 WEBRTC SECURE CONNECTION ESTABLISHED!'));
+        peer.on('error', err => console.error('❌ WEBRTC ERROR:', err));
 
         peer.signal(incomingSignal);
         connectionRef.current = peer;
