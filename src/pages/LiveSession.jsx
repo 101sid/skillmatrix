@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 
-// 👈 FIX 1: Bypass Vite's broken simple-peer import and use the global browser version
+// Bypass Vite's broken simple-peer import and use the global browser version
 const Peer = window.SimplePeer;
 
 // Google and Twilio STUN Servers to bypass Wi-Fi Firewalls
@@ -104,7 +104,7 @@ const LiveSession = () => {
         .on('broadcast', { event: 'chat' }, (payload) => {
           setMessages(prev => [...prev, payload.payload]);
         })
-        // 👈 FIX 2: Bulletproof Ping/Pong Radar
+        // Bulletproof Ping/Pong Radar
         .on('broadcast', { event: 'ping' }, () => {
           console.log("👋 Received PING from newcomer. Sending PONG...");
           channel.send({ type: 'broadcast', event: 'pong', payload: {} });
@@ -144,9 +144,26 @@ const LiveSession = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // --- ANTI-BLINK VIDEO ATTACHMENT ---
+  // This prevents the 1-second timer from making the video flash
+  useEffect(() => {
+    if (peerVideoRef.current && peerStream) {
+      if (peerVideoRef.current.srcObject !== peerStream) {
+         peerVideoRef.current.srcObject = peerStream;
+      }
+    }
+  }, [peerStream]);
+
+  useEffect(() => {
+    if (myVideoRef.current && stream && !isSharing) {
+      if (myVideoRef.current.srcObject !== stream) {
+         myVideoRef.current.srcObject = stream;
+      }
+    }
+  }, [stream, isSharing]);
+
   // 3. WEBRTC FUNCTIONS
   const startCall = (myStream, userId) => {
-    // 👈 FIX 3: Removed trickle: false to drastically speed up connection
     const peer = new Peer({ initiator: true, stream: myStream, config: ICE_SERVERS });
 
     peer.on('signal', data => {
@@ -190,37 +207,40 @@ const LiveSession = () => {
     }
   };
 
-  // 4. SCREEN SHARE
+  // 4. SCREEN SHARE (Upgraded)
   const toggleScreenShare = async () => {
     if (!isSharing && connectionRef.current) {
       try {
-        const screenStr = await navigator.mediaDevices.getDisplayMedia({ cursor: true });
+        const screenStr = await navigator.mediaDevices.getDisplayMedia({ video: true });
         const screenTrack = screenStr.getVideoTracks()[0];
+        const webCamTrack = stream.getVideoTracks()[0];
         
-        connectionRef.current.replaceTrack(
-          stream.getVideoTracks()[0],
-          screenTrack,
-          stream
-        );
+        // 1. Send screen to peer
+        connectionRef.current.replaceTrack(webCamTrack, screenTrack, stream);
+        // 2. Show screen on our own local preview
+        myVideoRef.current.srcObject = screenStr;
 
-        screenTrack.onended = () => stopScreenShare();
+        // If user clicks the native browser "Stop Sharing" button floating at the bottom
+        screenTrack.onended = () => {
+          connectionRef.current.replaceTrack(screenTrack, webCamTrack, stream);
+          myVideoRef.current.srcObject = stream;
+          setIsSharing(false);
+        };
+
         setIsSharing(true);
       } catch (err) {
         console.error("Screen share failed", err);
       }
     } else if (isSharing) {
-      stopScreenShare();
+      // If user clicks our red app button to stop sharing
+      const currentScreenTrack = myVideoRef.current.srcObject.getVideoTracks()[0];
+      const webCamTrack = stream.getVideoTracks()[0];
+      
+      connectionRef.current.replaceTrack(currentScreenTrack, webCamTrack, stream);
+      myVideoRef.current.srcObject = stream;
+      currentScreenTrack.stop(); // Turn off the screen recording light
+      setIsSharing(false);
     }
-  };
-
-  const stopScreenShare = () => {
-    const webcamTrack = stream.getVideoTracks()[0];
-    connectionRef.current.replaceTrack(
-      connectionRef.current.streams[0].getVideoTracks()[0],
-      webcamTrack,
-      stream
-    );
-    setIsSharing(false);
   };
 
   // 5. CONTROLS
@@ -308,13 +328,11 @@ const LiveSession = () => {
           {/* PEER VIDEO */}
           <div className="flex-1 relative bg-gray-900/50 rounded-[40px] overflow-hidden border border-white/5 shadow-2xl flex items-center justify-center min-h-[300px]">
              {peerStream ? (
+                // Cleaned up Ref to prevent blinking
                 <video 
                   autoPlay 
                   playsInline 
-                  ref={video => {
-                    peerVideoRef.current = video;
-                    if (video && peerStream) video.srcObject = peerStream;
-                  }} 
+                  ref={peerVideoRef} 
                   className="w-full h-full object-cover" 
                 />
              ) : (
@@ -324,7 +342,7 @@ const LiveSession = () => {
                 </div>
              )}
              <div className="absolute bottom-6 left-6 bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-2">
-                <span className="w-2 h-2 bg-green-500 rounded-full"></span> {isSharing ? "Screen Shared" : peerName}
+                <span className="w-2 h-2 bg-green-500 rounded-full"></span> {peerName}
              </div>
           </div>
 
@@ -336,19 +354,17 @@ const LiveSession = () => {
                   <span className="text-[10px] font-black uppercase tracking-widest mt-1">Camera Off</span>
                 </div>
              ) : (
+                // Cleaned up Ref to prevent blinking
                 <video 
                   autoPlay 
                   playsInline 
                   muted 
-                  ref={video => {
-                    myVideoRef.current = video;
-                    if (video && stream) video.srcObject = stream;
-                  }} 
-                  className="w-full h-full object-cover scale-x-[-1]" 
+                  ref={myVideoRef} 
+                  className={`w-full h-full object-cover ${isSharing ? '' : 'scale-x-[-1]'}`} 
                 />
              )}
              <div className="absolute bottom-6 left-6 bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider">
-                You {isMuted && <i className="fa-solid fa-microphone-slash text-red-500 ml-2"></i>}
+                You {isSharing && "- Sharing Screen"} {isMuted && <i className="fa-solid fa-microphone-slash text-red-500 ml-2"></i>}
              </div>
           </div>
           
