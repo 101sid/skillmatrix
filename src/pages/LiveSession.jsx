@@ -70,7 +70,6 @@ const LiveSession = () => {
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         setStream(localStream);
-        if (myVideoRef.current) myVideoRef.current.srcObject = localStream;
       } catch (err) {
         console.error("Camera Error:", err);
         alert("Please allow camera access to join the session.");
@@ -95,7 +94,7 @@ const LiveSession = () => {
         })
         .subscribe(async (status) => {
            if (status === 'SUBSCRIBED') {
-             // 👈 CRITICAL: If you are the student, you initiate the call!
+             // CRITICAL: If you are the student, you initiate the call!
              if (sData && sData.student_id === auth.user.id) {
                startCall(localStream, auth.user.id);
              }
@@ -133,7 +132,6 @@ const LiveSession = () => {
 
     peer.on('stream', remoteStream => {
       setPeerStream(remoteStream);
-      if (peerVideoRef.current) peerVideoRef.current.srcObject = remoteStream;
     });
 
     connectionRef.current = peer;
@@ -141,10 +139,8 @@ const LiveSession = () => {
 
   const handleIncomingSignal = (incomingSignal, myStream, userId) => {
     if (connectionRef.current) {
-        // We already have a peer object, just give it the answer
         connectionRef.current.signal(incomingSignal);
     } else {
-        // We don't have a peer object (we are the receiver/mentor), create one
         const peer = new Peer({ initiator: false, trickle: false, stream: myStream });
         
         peer.on('signal', data => {
@@ -153,7 +149,6 @@ const LiveSession = () => {
 
         peer.on('stream', remoteStream => {
           setPeerStream(remoteStream);
-          if (peerVideoRef.current) peerVideoRef.current.srcObject = remoteStream;
         });
 
         peer.signal(incomingSignal);
@@ -168,7 +163,6 @@ const LiveSession = () => {
         const screenStr = await navigator.mediaDevices.getDisplayMedia({ cursor: true });
         const screenTrack = screenStr.getVideoTracks()[0];
         
-        // Swap webcam track for screen track
         connectionRef.current.replaceTrack(
           stream.getVideoTracks()[0],
           screenTrack,
@@ -222,7 +216,6 @@ const LiveSession = () => {
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    // Broadcast to room
     if (channelRef.current) {
         channelRef.current.send({ type: 'broadcast', event: 'chat', payload: msg });
     }
@@ -281,7 +274,16 @@ const LiveSession = () => {
           {/* PEER VIDEO */}
           <div className="flex-1 relative bg-gray-900/50 rounded-[40px] overflow-hidden border border-white/5 shadow-2xl flex items-center justify-center min-h-[300px]">
              {peerStream ? (
-                <video ref={peerVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                // 👈 FIX: Robust Ref Assignment
+                <video 
+                  autoPlay 
+                  playsInline 
+                  ref={video => {
+                    peerVideoRef.current = video;
+                    if (video && peerStream) video.srcObject = peerStream;
+                  }} 
+                  className="w-full h-full object-cover" 
+                />
              ) : (
                 <div className="text-center">
                    <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${peerAvatar}`} className="w-24 h-24 rounded-full opacity-20 grayscale mx-auto mb-4" alt="" />
@@ -301,7 +303,17 @@ const LiveSession = () => {
                   <span className="text-[10px] font-black uppercase tracking-widest mt-1">Camera Off</span>
                 </div>
              ) : (
-                <video ref={myVideoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+                // 👈 FIX: Robust Ref Assignment
+                <video 
+                  autoPlay 
+                  playsInline 
+                  muted 
+                  ref={video => {
+                    myVideoRef.current = video;
+                    if (video && stream) video.srcObject = stream;
+                  }} 
+                  className="w-full h-full object-cover scale-x-[-1]" 
+                />
              )}
              <div className="absolute bottom-6 left-6 bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider">
                 You {isMuted && <i className="fa-solid fa-microphone-slash text-red-500 ml-2"></i>}
