@@ -19,7 +19,7 @@ const Dashboard = () => {
   const [instructors, setInstructors] = useState([]);
   const [liveMarket, setLiveMarket] = useState([]);
   
-  // 👈 NEW: State for the Up Next section
+  // State for the Up Next section
   const [upcomingSessions, setUpcomingSessions] = useState([]);
 
   useEffect(() => {
@@ -79,7 +79,7 @@ const Dashboard = () => {
           .limit(2);
         setRecentTx(txData || []);
 
-        // 6. 👈 NEW: Fetch Upcoming Sessions (Pending)
+        // 6. Fetch Upcoming Sessions (Pending)
         const { data: upcomingData } = await supabase
           .from('sessions')
           .select('*, mentor:profiles!sessions_mentor_id_fkey(full_name), student:profiles!sessions_student_id_fkey(full_name)')
@@ -167,7 +167,7 @@ const Dashboard = () => {
             <i className="fa-solid fa-dna absolute -right-10 -bottom-10 text-[200px] opacity-5 -rotate-12"></i>
           </div>
 
-          {/* 👈 UPDATED: DYNAMIC UP NEXT SECTION */}
+          {/* DYNAMIC UP NEXT SECTION */}
           <div className="lg:col-span-4 bg-white rounded-[40px] p-8 border border-gray-100 shadow-sm flex flex-col justify-center">
             <h4 className="font-extrabold text-lg mb-6 flex justify-between items-center">
               Up Next 
@@ -263,12 +263,24 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="lg:col-span-4 bg-white rounded-[32px] p-8 border-2 border-dashed border-gray-100 shadow-sm flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 bg-teal-50 text-brand-teal rounded-full flex items-center justify-center mb-4 text-2xl"><i className="fa-solid fa-chalkboard-user"></i></div>
-            <h4 className="font-extrabold text-lg mb-2">Ready to teach?</h4>
-            <p className="text-xs text-gray-500 mb-6 px-4 font-medium">Earn credits by sharing your knowledge with the network.</p>
-            <button onClick={() => navigate('/sessions-log')} className="w-full bg-brand-navy hover:bg-gray-800 text-white font-bold py-3.5 rounded-2xl transition-all shadow-md active:scale-95">
-              Check Pending Requests
+          {/* 👈 NEW: INSTANT MEET LAUNCHER CARD */}
+          <div 
+            onClick={() => navigate('/instant-meet')}
+            className="lg:col-span-4 bg-gradient-to-br from-brand-navy to-black p-8 rounded-[32px] shadow-2xl border border-brand-teal/30 text-white relative overflow-hidden group cursor-pointer transition-all hover:scale-[1.02] hover:shadow-brand-teal/20"
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-brand-teal/10 rounded-full blur-3xl group-hover:bg-brand-teal/20 transition-all"></div>
+            
+            <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-md border border-white/5">
+              <i className="fa-solid fa-bolt text-2xl text-[#F6C90E]"></i>
+            </div>
+            
+            <h3 className="text-xl font-black mb-2">Instant Room</h3>
+            <p className="text-sm text-gray-400 mb-6 font-medium leading-relaxed">
+              Generate a secure link and invite multiple peers to a grid-view exchange session instantly. No booking required.
+            </p>
+            
+            <button className="bg-brand-teal hover:bg-teal-400 text-brand-navy font-black py-3 px-6 rounded-xl text-xs uppercase tracking-widest transition-all w-full flex justify-between items-center group-hover:shadow-lg shadow-brand-teal/20">
+              Create Room <i className="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
             </button>
           </div>
 

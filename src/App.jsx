@@ -15,6 +15,7 @@ import Support from './pages/Support';
 import Messages from './pages/Messages';
 import SessionsLog from './pages/SessionsLog';
 import LiveSession from './pages/LiveSession';
+import InstantMeet from './pages/InstantMeet'; // 👈 NEW IMPORT
 
 function App() {
   return (
@@ -34,8 +35,10 @@ function App() {
         {/* Detail, Logging & Utility Pages */}
         <Route path="/session-detail" element={<SessionDetail />} />
         <Route path="/live-session" element={<LiveSession />} />
+        <Route path="/instant-meet" element={<InstantMeet />} /> {/* 👈 NEW ROUTE */}
         <Route path="/sessions-log" element={<SessionsLog />} />
         <Route path="/wallet" element={<Wallet />} />
+        <Route path="/profile" element={<Profile />} /> 
         <Route path="/profile/:id" element={<Profile />} />
         
         {/* User Preferences & Help */}
