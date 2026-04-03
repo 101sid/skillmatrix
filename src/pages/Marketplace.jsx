@@ -88,6 +88,14 @@ const Marketplace = () => {
     mentor.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // 👈 FIX: Added the missing modal function here!
+  const handleOpenModal = (mentor) => {
+    setSelectedMentor(mentor);
+    setBookingStatus('idle');
+    setBookingError('');
+    setIsModalOpen(true);
+  };
+
   // 3. BOOKING LOGIC: The Multi-Step Transaction
   const handleConfirmBooking = async () => {
     setBookingStatus('loading');
