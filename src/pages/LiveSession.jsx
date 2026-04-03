@@ -21,7 +21,7 @@ const LiveSession = () => {
   const connectionRef = useRef(null);
   const channelRef = useRef(null);
   const chatEndRef = useRef(null);
-  const animationRef = useRef(null); // For the Canvas Compositor
+  const animationRef = useRef(null);
 
   // --- STATES ---
   const [myId, setMyId] = useState(null);
@@ -36,7 +36,7 @@ const LiveSession = () => {
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [duration, setDuration] = useState(0);
-  const [audioBlocked, setAudioBlocked] = useState(false); // 👈 For Autoplay Policy
+  const [audioBlocked, setAudioBlocked] = useState(false);
   
   // Chat
   const [messages, setMessages] = useState([]);
@@ -117,7 +117,6 @@ const LiveSession = () => {
     if (peerVideoRef.current && peerStream) {
       if (peerVideoRef.current.srcObject !== peerStream) {
          peerVideoRef.current.srcObject = peerStream;
-         // 👈 FIX: Catch the Autoplay block and alert the user!
          peerVideoRef.current.play().catch(e => {
             if (e.name === 'NotAllowedError') setAudioBlocked(true);
          });
@@ -125,13 +124,15 @@ const LiveSession = () => {
     }
   }, [peerStream]);
 
+  // 👈 FIX: This now triggers every time isVideoOff changes to re-attach the feed
   useEffect(() => {
-    if (myVideoRef.current && stream && !isSharing) {
+    if (!isVideoOff && myVideoRef.current && stream && !isSharing) {
       if (myVideoRef.current.srcObject !== stream) {
+         console.log("📷 Re-attaching camera to video element...");
          myVideoRef.current.srcObject = stream;
       }
     }
-  }, [stream, isSharing]);
+  }, [stream, isSharing, isVideoOff]);
 
   // 3. WEBRTC FUNCTIONS
   const startCall = (myStream, userId) => {
@@ -161,7 +162,6 @@ const LiveSession = () => {
         const screenTrack = screenStr.getVideoTracks()[0];
         const webCamTrack = stream.getVideoTracks()[0];
         
-        // --- CREATE CANVAS TO MERGE BOTH VIDEOS ---
         const canvas = document.createElement('canvas');
         canvas.width = 1280;
         canvas.height = 720;
@@ -181,8 +181,7 @@ const LiveSession = () => {
           if (screenVideo.readyState >= 2) {
             ctx.drawImage(screenVideo, 0, 0, canvas.width, canvas.height);
           }
-          if (camVideo.readyState >= 2) {
-            // Draw webcam in bottom right corner with a cool border
+          if (camVideo.readyState >= 2 && !isVideoOff) {
             const camW = 320, camH = 180;
             const camX = canvas.width - camW - 20;
             const camY = canvas.height - camH - 20;
@@ -193,7 +192,7 @@ const LiveSession = () => {
             ctx.clip();
             ctx.drawImage(camVideo, camX, camY, camW, camH);
             ctx.lineWidth = 6;
-            ctx.strokeStyle = '#2DD4BF'; // Brand Teal
+            ctx.strokeStyle = '#2DD4BF';
             ctx.stroke();
             ctx.restore();
           }
@@ -201,17 +200,12 @@ const LiveSession = () => {
         };
         drawFrames();
 
-        // Capture the canvas at 30 FPS
         const combinedStream = canvas.captureStream(30);
         const combinedVideoTrack = combinedStream.getVideoTracks()[0];
 
-        // Send the combined video to the peer!
         connectionRef.current.replaceTrack(webCamTrack, combinedVideoTrack, stream);
-        
-        // Show the combined video on our local screen so we see what they see
         myVideoRef.current.srcObject = combinedStream;
 
-        // Cleanup when they click "Stop Sharing" on the browser banner
         screenTrack.onended = () => {
           cancelAnimationFrame(animationRef.current);
           connectionRef.current.replaceTrack(combinedVideoTrack, webCamTrack, stream);
@@ -224,16 +218,11 @@ const LiveSession = () => {
         console.error("Screen share failed", err);
       }
     } else if (isSharing) {
-      // Manual stop
       cancelAnimationFrame(animationRef.current);
       const currentTrack = myVideoRef.current.srcObject.getVideoTracks()[0];
       const webCamTrack = stream.getVideoTracks()[0];
-      
       connectionRef.current.replaceTrack(currentTrack, webCamTrack, stream);
       myVideoRef.current.srcObject = stream;
-      
-      // Stop the screen sharing track to remove browser banner
-      navigator.mediaDevices.getSupportedConstraints();
       setIsSharing(false);
     }
   };
@@ -242,14 +231,16 @@ const LiveSession = () => {
   const toggleMute = () => {
     if (stream?.getAudioTracks()[0]) {
       stream.getAudioTracks()[0].enabled = !stream.getAudioTracks()[0].enabled;
-      setIsMuted(!isMuted);
+      setIsMuted(!stream.getAudioTracks()[0].enabled);
     }
   };
 
   const toggleVideo = () => {
     if (stream?.getVideoTracks()[0]) {
-      stream.getVideoTracks()[0].enabled = !stream.getVideoTracks()[0].enabled;
-      setIsVideoOff(!isVideoOff);
+      const videoTrack = stream.getVideoTracks()[0];
+      videoTrack.enabled = !videoTrack.enabled;
+      // 👈 Update state so the UI reacts AND the useEffect re-runs
+      setIsVideoOff(!videoTrack.enabled);
     }
   };
 
@@ -287,11 +278,9 @@ const LiveSession = () => {
       </div>
 
       <div className="flex-grow flex overflow-hidden">
-        {/* VIDEOS */}
         <div className="flex-grow relative p-8 flex flex-col md:flex-row gap-6 justify-center">
           
           <div className="flex-1 relative bg-gray-900/50 rounded-[40px] overflow-hidden border border-white/5 flex items-center justify-center min-h-[300px]">
-             {/* AUDIO BLOCKER OVERLAY */}
              {audioBlocked && (
                <div className="absolute inset-0 bg-black/80 z-50 flex flex-col items-center justify-center backdrop-blur-md">
                  <i className="fa-solid fa-volume-xmark text-4xl text-brand-teal mb-4 animate-bounce"></i>
@@ -312,7 +301,10 @@ const LiveSession = () => {
 
           <div className="w-full md:w-1/3 relative bg-black rounded-[40px] overflow-hidden border border-brand-teal/30 flex items-center justify-center min-h-[300px] max-w-sm">
              {isVideoOff ? (
-                <div className="text-gray-500 flex flex-col items-center"><i className="fa-solid fa-video-slash text-3xl mb-2"></i></div>
+                <div className="text-gray-500 flex flex-col items-center">
+                    <i className="fa-solid fa-video-slash text-3xl mb-2"></i>
+                    <span className="text-[10px] font-black uppercase tracking-widest">Camera Off</span>
+                </div>
              ) : (
                 <video autoPlay playsInline muted ref={myVideoRef} className={`w-full h-full object-cover ${isSharing ? '' : 'scale-x-[-1]'}`} />
              )}
@@ -322,7 +314,6 @@ const LiveSession = () => {
           </div>
         </div>
 
-        {/* CHAT SIDEBAR */}
         <div className="w-[360px] bg-black/40 border-l border-white/5 flex flex-col hidden xl:flex">
           <div className="flex-grow p-6 overflow-y-auto space-y-6">
              {messages.map((msg) => (
@@ -346,7 +337,6 @@ const LiveSession = () => {
         </div>
       </div>
 
-      {/* CONTROLS */}
       <div className="p-6 bg-black flex justify-center items-center gap-6 border-t border-white/5 z-10">
         <button onClick={toggleMute} className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${isMuted ? 'bg-red-500' : 'bg-white/10 hover:bg-white/20'}`}>
           <i className={`fa-solid ${isMuted ? 'fa-microphone-slash' : 'fa-microphone'} text-lg`}></i>
